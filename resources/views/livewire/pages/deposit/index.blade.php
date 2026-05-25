@@ -22,11 +22,11 @@ state([
     ]
 ]);
 
+
 $deposits = computed(function () {
-    return Deposit::where('user_id', Auth::id())
-        ->orderBy('created_at', 'desc')
-        ->get();
+    return app(DepositInterface::class)->get() ;
 });
+
 
 $selectMethod = function ($method) {
     $this->paymentMethod = $method;
@@ -42,7 +42,7 @@ $submitDeposit = function () {
     try {
         $imagePath = app(FileService::class)->uploadImage($this->transactionImage, 'deposits');
 
-        app(DepositInterface::class)->create(Auth::id(), 'pending', $this->amount, 'إيداع للمحفظة', $imagePath);
+        app(DepositInterface::class)->create(Auth::id(), $this->amount, 'إيداع للمحفظة', $imagePath);
 
         session()->flash('success', 'تم إرسال طلب الإيداع بنجاح، جاري مراجعة التحويل من قبل الإدارة.');
         
@@ -56,8 +56,11 @@ $submitDeposit = function () {
 
 $deleteDeposit = function ($id) {
     try {
-        $deposit = Deposit::where('user_id', Auth::id())->where('status', 'pending')->findOrFail($id);
-        $deposit->delete();
+
+       $status = app(DepositInterface::class)->delete($id);
+
+        throw_if($status,'no deposit to delete');
+       
         session()->flash('success', 'تم حذف طلب الإيداع بنجاح.');
     } catch (\Exception $e) {
         session()->flash('failed', 'لا يمكن حذف هذا الطلب حالياً.');

@@ -6,14 +6,7 @@ class PlanInterfaceRepository {
 
     public function create($data){}
 
-    public function find($id){
-
-    
-
-        return
-
-
-    }
+    public function find($id){}
 
     public function get(){}
 
