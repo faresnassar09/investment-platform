@@ -59,7 +59,7 @@ $deleteDeposit = function ($id) {
 
        $status = app(DepositInterface::class)->delete($id);
 
-        throw_if($status,'no deposit to delete');
+        throw_if(!$status,'no deposit to delete');
        
         session()->flash('success', 'تم حذف طلب الإيداع بنجاح.');
     } catch (\Exception $e) {

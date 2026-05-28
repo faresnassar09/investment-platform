@@ -1,8 +1,12 @@
 <?php
 
-use App\Models\User\Plan\InvestmentPlan;
 use App\Models\User\Investment\Investment;
-use App\Models\User\Wallet\UserWallet; 
+use App\Models\User\Wallet\UserWallet;
+use App\Repository\Contract\InvestmentInterface;
+use App\Repository\Contract\PlanInterface;
+use App\Repository\Contract\UserWalletInterface;
+use App\Services\Logging\LoggingService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 use function Livewire\Volt\{state, computed};
@@ -10,22 +14,22 @@ use function Livewire\Volt\layout;
 
 layout('layouts.app');
 
-// تعريف حالة اختيار نوع الحساب لكل خطة (تخزن مصفوفة مفتاحها معرف الخطة وقيمتها نوع الحساب)
-state(['selectedWallet' => []]);
+state(['selectedWallet' => [], 'userId' => Auth::id()]);
 
-// جلب محفظة المستخدم الحالي
+
+
 $userWallet = computed(function () {
-    return UserWallet::where('user_id', Auth::id())->first();
+    return app(UserWalletInterface::class)->find($this->userId);
 });
 
-// جلب الخطط الاستثمارية المتاحة
+
 $plans = computed(function () {
-    return InvestmentPlan::orderBy('price', 'asc')->get();
+    return app(PlanInterface::class)->get();
 });
 
-// دالة تفعيل الخطة الاستثمارية
+
 $subscribeToPlan = function ($planId) {
-    // التأكد من اختيار نوع الحساب أولاً
+
     $walletType = $this->selectedWallet[$planId] ?? null;
     
     if (!$walletType || !in_array($walletType, ['balance', 'team_earnings', 'salary'])) {
@@ -34,15 +38,17 @@ $subscribeToPlan = function ($planId) {
     }
 
     try {
-        $plan = InvestmentPlan::findOrFail($planId);
-        $wallet = UserWallet::where('user_id', Auth::id())->first();
+
+        $plan = app(PlanInterface::class)->find($planId);
+
+        $wallet = app(UserWalletInterface::class)->find($this->userId);
 
         if (!$wallet) {
             session()->flash('failed', 'لم يتم العثور على محفظة نشطة لحسابك.');
             return;
         }
 
-        // التحقق من أن الحساب المختار يحتوي على رصيد كافٍ
+
         if ($wallet->$walletType < $plan->price) {
             $accountNames = [
                 'balance' => 'الرصيد الأساسي',
@@ -53,29 +59,26 @@ $subscribeToPlan = function ($planId) {
             return;
         }
 
-        // تنفيذ المعاملة المالية بأمان تامي داخل الداتابيز
+
         DB::transaction(function () use ($wallet, $walletType, $plan) {
-            // تجميد السطر لمنع التلاعب والتكرار العشوائي بالتزامن (Race Condition)
-            $activeWallet = UserWallet::where('id', $wallet->id)->lockForUpdate()->first();
+
+            $activeWallet = app(UserWalletInterface::class)->findAndLock($wallet->id);
             
-            // خصم القيمة من الحساب المحدد
+            app(InvestmentInterface::class)->create($this->userId,$plan->id,$plan->price,$plan->duration_days);
+
             $activeWallet->decrement($walletType, $plan->price);
 
-            // إنشاء سجل الاستثمار الجديد للمستخدم
-            Investment::create([
-                'user_id' => Auth::id(),
-                'investment_plan_id' => $plan->id,
-                'amount' => $plan->price,
-                'status' => 'active',
-                'expires_at' => now()->addDays($plan->duration_days ?? 300),
-            ]);
+
+
         });
 
-        // إعادة تصفير الاختيار بعد الشراء الناجح
+
         $this->selectedWallet[$planId] = '';
 
         session()->flash('success', 'تم تفعيل خطة ' . $plan->name . ' بنجاح! تم الخصم وبدأ استثمارك الآن.');
     } catch (\Exception $e) {
+
+        app(LoggingService::class)->failedLogger('failed to apply investment',[],$e->getMessage());
         session()->flash('failed', 'عذراً، تعذر تفعيل الخطة حالياً. يرجى المحاولة مرة أخرى.');
     }
 };
@@ -200,7 +203,9 @@ $subscribeToPlan = function ($planId) {
 
                         <div class="text-sm text-gray-200 leading-relaxed min-h-[100px] px-1 whitespace-pre-line space-y-2.5">
                             @if($plan->description)
-                                {!! border_bullet_list($plan->description) !!}
+                                {!! border_bullet_list($plan->description) .
+                                    border_bullet_list( 'عدد ايام الصلاحية'. ' '. $plan->duration_days . ' يوم ') !!}
+
                             @else
                                 <span class="text-gray-600 italic">لا يوجد وصف متاح لهذه الخطة حالياً.</span>
                             @endif
