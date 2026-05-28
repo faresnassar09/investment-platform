@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('user_investments', function (Blueprint $table) {
+        Schema::create('investments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')
             ->constrained()
@@ -20,6 +20,10 @@ return new class extends Migration
             $table->foreignId('investment_plan_id')
             ->constrained()
             ->cascadeOnDelete();
+            
+            $table->decimal('amount');
+            $table->string('status',20);
+            $table->timestamp('expires_at')->nullable();
             
             $table->timestamps();
         });
@@ -30,6 +34,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('user_investments');
+        Schema::dropIfExists('investments');
     }
 };

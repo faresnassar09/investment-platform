@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('description',255);
             $table->decimal('price',8,2);
             $table->string('currency');
+            $table->integer('duration_days');
             $table->timestamps();
         });
     }
